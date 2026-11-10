@@ -1,0 +1,26 @@
+{
+  "name": "sonido-vivo-backend",
+  "version": "1.0.0",
+  "description": "Backend de Sonido Vivo desarrollado con Node.js, Express y PostgreSQL",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kathryn-mt/sonido-vivo-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kathryn-mt/sonido-vivo-backend/issues"
+  },
+  "homepage": "https://github.com/kathryn-mt/sonido-vivo-backend#readme",
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  }
+}
