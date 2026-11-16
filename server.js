@@ -2,6 +2,7 @@
 const express = require('express');
 const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
+const usuariosRoutes = require('./routes/usuarios.routes');
 
 const app = express();
 const PORT = 3000;
@@ -17,6 +18,7 @@ app.use(express.json());
 // ==========================================
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/usuarios', usuariosRoutes);
 
 // ==========================================
 // RUTA DE SALUDO
