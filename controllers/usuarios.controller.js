@@ -1,5 +1,14 @@
 
 const pool = require('../db');
+const {
+    LIMITE_NOMBRE,
+    LIMITE_APELLIDO,
+    LIMITE_REGION,
+    LIMITE_COMUNA,
+    LIMITE_DIRECCION,
+    validarCorreo,
+    validarRun
+} = require('../utils/auth.validation');
 
 // ==========================================
 // ROLES PERMITIDOS
@@ -27,7 +36,11 @@ async function listarUsuarios(req, res) {
                 rol,
                 activo,
                 creado_en,
-                actualizado_en
+                actualizado_en,
+                run,
+                region,
+                comuna,
+                direccion
              FROM usuarios
              ORDER BY id`
         );
@@ -86,7 +99,11 @@ async function obtenerUsuarioPorId(req, res) {
                 rol,
                 activo,
                 creado_en,
-                actualizado_en
+                actualizado_en,
+                run,
+                region,
+                comuna,
+                direccion
              FROM usuarios
              WHERE id = $1`,
             [idUsuario]
@@ -142,44 +159,6 @@ async function actualizarUsuario(req, res) {
         });
     }
 
-    const nombre = datosUsuario.nombre;
-    const apellido = datosUsuario.apellido;
-    const email = datosUsuario.email;
-
-    if (
-        typeof nombre !== 'string' ||
-        typeof apellido !== 'string' ||
-        typeof email !== 'string'
-    ) {
-        return res.status(400).json({
-            mensaje: 'Debes ingresar nombre, apellido y correo válidos'
-        });
-    }
-
-    if (
-        !nombre.trim() ||
-        !apellido.trim() ||
-        !email.trim() ||
-        nombre.trim().length > 100 ||
-        apellido.trim().length > 100 ||
-        email.trim().length > 255
-    ) {
-        return res.status(400).json({
-            mensaje: 'Los datos ingresados no son válidos'
-        });
-    }
-
-    const correo = email.trim().toLowerCase();
-
-    const correoValido =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
-
-    if (!correoValido) {
-        return res.status(400).json({
-            mensaje: 'El correo electrónico no es válido'
-        });
-    }
-
     if (
         datosUsuario.rol !== undefined &&
         !esAdministrador
@@ -202,8 +181,15 @@ async function actualizarUsuario(req, res) {
         const consultaUsuario = await pool.query(
             `SELECT
                 id,
+                nombre,
+                apellido,
+                email,
                 rol,
-                activo
+                activo,
+                run,
+                region,
+                comuna,
+                direccion
              FROM usuarios
              WHERE id = $1`,
             [idUsuario]
@@ -220,6 +206,77 @@ async function actualizarUsuario(req, res) {
         if (usuarioActual.activo === false) {
             return res.status(409).json({
                 mensaje: 'No se puede modificar un usuario desactivado'
+            });
+        }
+
+        const nombre = datosUsuario.nombre !== undefined
+            ? datosUsuario.nombre
+            : usuarioActual.nombre;
+        const apellido = datosUsuario.apellido !== undefined
+            ? datosUsuario.apellido
+            : usuarioActual.apellido;
+        const email = datosUsuario.email !== undefined
+            ? datosUsuario.email
+            : usuarioActual.email;
+        const run = datosUsuario.run !== undefined
+            ? validarRun(datosUsuario.run)
+            : usuarioActual.run;
+        const region = datosUsuario.region !== undefined
+            ? datosUsuario.region
+            : usuarioActual.region;
+        const comuna = datosUsuario.comuna !== undefined
+            ? datosUsuario.comuna
+            : usuarioActual.comuna;
+        const direccion = datosUsuario.direccion !== undefined
+            ? datosUsuario.direccion
+            : usuarioActual.direccion;
+
+        if (
+            typeof nombre !== 'string' ||
+            typeof apellido !== 'string' ||
+            typeof email !== 'string' ||
+            (datosUsuario.region !== undefined && typeof region !== 'string') ||
+            (datosUsuario.comuna !== undefined && typeof comuna !== 'string') ||
+            (datosUsuario.direccion !== undefined && typeof direccion !== 'string') ||
+            (datosUsuario.run !== undefined && !run)
+        ) {
+            return res.status(400).json({
+                mensaje: 'Los datos ingresados no son válidos'
+            });
+        }
+
+        const nombreFinal = nombre.trim();
+        const apellidoFinal = apellido.trim();
+        const correo = email.trim().toLowerCase();
+        const regionFinal = typeof region === 'string' ? region.trim() : region;
+        const comunaFinal = typeof comuna === 'string' ? comuna.trim() : comuna;
+        const direccionFinal = typeof direccion === 'string'
+            ? direccion.trim()
+            : direccion;
+
+        if (
+            !nombreFinal ||
+            !apellidoFinal ||
+            !correo ||
+            nombreFinal.length > LIMITE_NOMBRE ||
+            apellidoFinal.length > LIMITE_APELLIDO ||
+            (typeof regionFinal === 'string' && regionFinal.length > LIMITE_REGION) ||
+            (typeof comunaFinal === 'string' && comunaFinal.length > LIMITE_COMUNA) ||
+            (typeof direccionFinal === 'string' && direccionFinal.length > LIMITE_DIRECCION) ||
+            !validarCorreo(correo)
+        ) {
+            return res.status(400).json({
+                mensaje: 'Los datos ingresados no son válidos'
+            });
+        }
+
+        if (
+            (datosUsuario.region !== undefined && !regionFinal) ||
+            (datosUsuario.comuna !== undefined && !comunaFinal) ||
+            (datosUsuario.direccion !== undefined && !direccionFinal)
+        ) {
+            return res.status(400).json({
+                mensaje: 'Los datos ingresados no son válidos'
             });
         }
 
@@ -243,8 +300,12 @@ async function actualizarUsuario(req, res) {
                  apellido = $2,
                  email = $3,
                  rol = $4,
+                 run = $5,
+                 region = $6,
+                 comuna = $7,
+                 direccion = $8,
                  actualizado_en = CURRENT_TIMESTAMP
-             WHERE id = $5
+             WHERE id = $9
                AND activo = TRUE
              RETURNING
                 id,
@@ -254,12 +315,20 @@ async function actualizarUsuario(req, res) {
                 rol,
                 activo,
                 creado_en,
-                actualizado_en`,
+                actualizado_en,
+                run,
+                region,
+                comuna,
+                direccion`,
             [
-                nombre.trim(),
-                apellido.trim(),
+                nombreFinal,
+                apellidoFinal,
                 correo,
                 rolFinal,
+                run,
+                regionFinal,
+                comunaFinal,
+                direccionFinal,
                 idUsuario
             ]
         );
@@ -282,6 +351,11 @@ async function actualizarUsuario(req, res) {
         );
 
         if (error.code === '23505') {
+            if (error.constraint === 'usuarios_run_unique_idx') {
+                return res.status(409).json({
+                    mensaje: 'El RUN ya está registrado'
+                });
+            }
             return res.status(409).json({
                 mensaje: 'El correo electrónico ya está registrado'
             });
@@ -328,7 +402,11 @@ async function desactivarUsuario(req, res) {
                 rol,
                 activo,
                 creado_en,
-                actualizado_en`,
+                actualizado_en,
+                run,
+                region,
+                comuna,
+                direccion`,
             [idUsuario]
         );
 
