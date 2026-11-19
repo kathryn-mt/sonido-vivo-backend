@@ -2,33 +2,51 @@ const pool = require('../db');
 
 
 
-// PREPARAR PRODUCTOS PARA EL FRONTEND - KATY
+// PREPARAR PRODUCTOS PARA REACT - KATY
 
 
 function prepararProducto(producto) {
 
     return {
-        id: Number(producto.id),
-        codigo: producto.codigo,
+        id: Number(producto.id_producto),
+        codigo: producto.sku,
         nombre: producto.nombre,
         marca: producto.marca,
         modelo: producto.modelo,
         categoria: producto.categoria,
-        precio: Number(producto.precio),
-
-        precioAnterior:
-            producto.precioAnterior === null ||
-            producto.precioAnterior === undefined
-                ? null
-                : Number(producto.precioAnterior),
-
+        id_categoria: Number(producto.id_categoria),
+        precio: Number(producto.precio_clp),
+        precioAnterior: null,
         stock: Number(producto.stock),
         descripcion: producto.descripcion,
-        imagen: producto.imagen,
-        origen: producto.origen,
-        creado_en: producto.creado_en
+        imagen: producto.imagen_url,
+        activo: Number(producto.activo)
     };
 }
+
+
+
+// CONSULTA BASE DE PRODUCTOS - KATY
+
+
+const consultaProductos = `
+    SELECT
+        p.id_producto,
+        p.id_categoria,
+        p.sku,
+        p.nombre,
+        p.marca,
+        p.modelo,
+        p.descripcion,
+        p.precio_clp,
+        p.stock,
+        p.imagen_url,
+        p.activo,
+        c.nombre AS categoria
+    FROM productos p
+    INNER JOIN categorias c
+        ON p.id_categoria = c.id_categoria
+`;
 
 
 
@@ -43,22 +61,20 @@ function validarDatosProducto(datosProducto) {
     const modelo = datosProducto.modelo;
     const categoria = datosProducto.categoria;
     const precio = datosProducto.precio;
-    const precioAnterior = datosProducto.precioAnterior;
     const stock = datosProducto.stock;
     const descripcion = datosProducto.descripcion;
     const imagen = datosProducto.imagen;
+    const precioAnterior = datosProducto.precioAnterior;
 
-    // Validar campos principales
+    // Validar los datos obligatorios
 
     if (
         typeof codigo !== 'string' ||
         !codigo.trim() ||
+        codigo.trim().length > 50 ||
         typeof nombre !== 'string' ||
         !nombre.trim() ||
-        typeof marca !== 'string' ||
-        !marca.trim() ||
-        typeof modelo !== 'string' ||
-        !modelo.trim() ||
+        nombre.trim().length > 150 ||
         typeof categoria !== 'string' ||
         !categoria.trim() ||
         typeof precio !== 'number' ||
@@ -67,21 +83,33 @@ function validarDatosProducto(datosProducto) {
         !Number.isInteger(stock) ||
         stock < 0
     ) {
-        return 'Debes ingresar datos válidos para el producto';
+        return 'Debes ingresar código, nombre, categoría, precio y stock válidos';
     }
 
-    // Validar precio anterior
+    // Validar marca
 
     if (
-        precioAnterior !== undefined &&
-        precioAnterior !== null &&
+        marca !== undefined &&
+        marca !== null &&
         (
-            typeof precioAnterior !== 'number' ||
-            !Number.isFinite(precioAnterior) ||
-            precioAnterior <= precio
+            typeof marca !== 'string' ||
+            marca.length > 100
         )
     ) {
-        return 'El precio anterior debe ser mayor al precio actual';
+        return 'La marca debe ser un texto válido';
+    }
+
+    // Validar modelo
+
+    if (
+        modelo !== undefined &&
+        modelo !== null &&
+        (
+            typeof modelo !== 'string' ||
+            modelo.length > 100
+        )
+    ) {
+        return 'El modelo debe ser un texto válido';
     }
 
     // Validar descripción
@@ -89,9 +117,12 @@ function validarDatosProducto(datosProducto) {
     if (
         descripcion !== undefined &&
         descripcion !== null &&
-        typeof descripcion !== 'string'
+        (
+            typeof descripcion !== 'string' ||
+            descripcion.length > 500
+        )
     ) {
-        return 'La descripción debe ser un texto válido';
+        return 'La descripción debe tener como máximo 500 caracteres';
     }
 
     // Validar imagen
@@ -99,15 +130,67 @@ function validarDatosProducto(datosProducto) {
     if (
         imagen !== undefined &&
         imagen !== null &&
-        typeof imagen !== 'string'
+        (
+            typeof imagen !== 'string' ||
+            imagen.length > 500
+        )
     ) {
         return 'La imagen debe ser un texto válido';
     }
 
-    // Sin errores
+    // El modelo actual no contempla precio anterior
+
+    if (
+        precioAnterior !== undefined &&
+        precioAnterior !== null
+    ) {
+        return 'El modelo de base de datos todavía no contempla precioAnterior';
+    }
 
     return null;
 }
+
+
+
+// BUSCAR CATEGORÍA POR NOMBRE - KATY
+
+
+async function buscarCategoria(nombreCategoria) {
+
+    const resultado = await pool.query(
+        `SELECT id_categoria
+         FROM categorias
+         WHERE LOWER(nombre) = LOWER($1)`,
+        [nombreCategoria.trim()]
+    );
+
+    if (resultado.rows.length === 0) {
+        return null;
+    }
+
+    return Number(resultado.rows[0].id_categoria);
+}
+
+
+
+// CONSULTAR PRODUCTO EN POSTGRESQL - KATY
+
+
+async function buscarProductoPorId(id) {
+
+    const resultado = await pool.query(
+        consultaProductos + `
+        WHERE p.id_producto = $1`,
+        [id]
+    );
+
+    if (resultado.rows.length === 0) {
+        return null;
+    }
+
+    return prepararProducto(resultado.rows[0]);
+}
+
 
 
 // LISTAR TODOS LOS PRODUCTOS - KATY
@@ -118,27 +201,13 @@ async function listarProductos(req, res) {
     try {
 
         const resultado = await pool.query(
-            `SELECT
-                id,
-                codigo,
-                nombre,
-                marca,
-                modelo,
-                categoria,
-                precio,
-                precio_anterior AS "precioAnterior",
-                stock,
-                descripcion,
-                imagen,
-                origen,
-                creado_en
-             FROM productos
-             ORDER BY id`
+            consultaProductos + `
+            ORDER BY p.id_producto`
         );
 
-        // Preparar los productos para React
-
-        const productos = resultado.rows.map(prepararProducto);
+        const productos = resultado.rows.map(
+            prepararProducto
+        );
 
         return res.status(200).json(productos);
 
@@ -162,11 +231,7 @@ async function listarProductos(req, res) {
 
 async function obtenerProductoPorId(req, res) {
 
-    // Obtener el ID desde la URL
-
     const id = Number(req.params.id);
-
-    // Validar el identificador
 
     if (!Number.isSafeInteger(id) || id <= 0) {
 
@@ -177,42 +242,14 @@ async function obtenerProductoPorId(req, res) {
 
     try {
 
-        // Consultar producto en PostgreSQL
+        const producto = await buscarProductoPorId(id);
 
-        const resultado = await pool.query(
-            `SELECT
-                id,
-                codigo,
-                nombre,
-                marca,
-                modelo,
-                categoria,
-                precio,
-                precio_anterior AS "precioAnterior",
-                stock,
-                descripcion,
-                imagen,
-                origen,
-                creado_en
-             FROM productos
-             WHERE id = $1`,
-            [id]
-        );
-
-        // Comprobar si existe
-
-        if (resultado.rows.length === 0) {
+        if (producto === null) {
 
             return res.status(404).json({
                 mensaje: 'Producto no encontrado'
             });
         }
-
-        // Preparar producto para React
-
-        const producto = prepararProducto(
-            resultado.rows[0]
-        );
 
         return res.status(200).json(producto);
 
@@ -236,11 +273,7 @@ async function obtenerProductoPorId(req, res) {
 
 async function registrarProducto(req, res) {
 
-    // Obtener los datos del cliente
-
     const datosProducto = req.body || {};
-
-    // Validar los datos
 
     const errorValidacion = validarDatosProducto(
         datosProducto
@@ -253,86 +286,94 @@ async function registrarProducto(req, res) {
         });
     }
 
-    // Obtener cada propiedad
+    // Obtener datos
 
     const codigo = datosProducto.codigo.trim().toUpperCase();
     const nombre = datosProducto.nombre.trim();
-    const marca = datosProducto.marca.trim();
-    const modelo = datosProducto.modelo.trim();
+
+    const marca = datosProducto.marca === undefined ||
+                  datosProducto.marca === null
+        ? null
+        : datosProducto.marca.trim();
+
+    const modelo = datosProducto.modelo === undefined ||
+                   datosProducto.modelo === null
+        ? null
+        : datosProducto.modelo.trim();
+
     const categoria = datosProducto.categoria.trim();
     const precio = datosProducto.precio;
-    const precioAnterior = datosProducto.precioAnterior;
     const stock = datosProducto.stock;
-    const descripcion = datosProducto.descripcion;
-    const imagen = datosProducto.imagen;
+
+    const descripcion = datosProducto.descripcion === undefined
+        ? null
+        : datosProducto.descripcion;
+
+    const imagen = datosProducto.imagen === undefined
+        ? null
+        : datosProducto.imagen;
 
     try {
 
-        // Registrar producto en PostgreSQL
+        // Buscar categoría
+
+        const idCategoria = await buscarCategoria(categoria);
+
+        if (idCategoria === null) {
+
+            return res.status(400).json({
+                mensaje: 'La categoría indicada no existe'
+            });
+        }
+
+        // Registrar producto
 
         const resultado = await pool.query(
             `INSERT INTO productos (
-                codigo,
+                id_categoria,
+                sku,
                 nombre,
                 marca,
                 modelo,
-                categoria,
-                precio,
-                precio_anterior,
-                stock,
                 descripcion,
-                imagen,
-                origen
+                precio_clp,
+                stock,
+                imagen_url,
+                activo
             )
             VALUES (
                 $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10, $11
+                $6, $7, $8, $9, $10
             )
-            RETURNING
-                id,
-                codigo,
-                nombre,
-                marca,
-                modelo,
-                categoria,
-                precio,
-                precio_anterior AS "precioAnterior",
-                stock,
-                descripcion,
-                imagen,
-                origen,
-                creado_en`,
+            RETURNING id_producto`,
             [
+                idCategoria,
                 codigo,
                 nombre,
                 marca,
                 modelo,
-                categoria,
+                descripcion,
                 precio,
-                precioAnterior ?? null,
                 stock,
-                descripcion ?? null,
-                imagen ?? null,
-                'EC2'
+                imagen,
+                1
             ]
         );
 
-        // Preparar producto registrado
-
-        const producto = prepararProducto(
-            resultado.rows[0]
+        const idProducto = Number(
+            resultado.rows[0].id_producto
         );
+
+        const producto = await buscarProductoPorId(idProducto);
 
         return res.status(201).json(producto);
 
     } catch (error) {
 
-        // Código de producto duplicado
-
         if (error.code === '23505') {
 
             return res.status(409).json({
-                mensaje: 'Ya existe un producto con ese código o identificador'
+                mensaje: 'Ya existe un producto con ese código'
             });
         }
 
@@ -353,11 +394,7 @@ async function registrarProducto(req, res) {
 
 async function modificarProducto(req, res) {
 
-    // Obtener identificador
-
     const id = Number(req.params.id);
-
-    // Validar identificador
 
     if (!Number.isSafeInteger(id) || id <= 0) {
 
@@ -366,11 +403,7 @@ async function modificarProducto(req, res) {
         });
     }
 
-    // Obtener datos enviados
-
     const datosProducto = req.body || {};
-
-    // Validar datos
 
     const errorValidacion = validarDatosProducto(
         datosProducto
@@ -383,67 +416,75 @@ async function modificarProducto(req, res) {
         });
     }
 
-    // Obtener cada propiedad
+    // Obtener datos
 
     const codigo = datosProducto.codigo.trim().toUpperCase();
     const nombre = datosProducto.nombre.trim();
-    const marca = datosProducto.marca.trim();
-    const modelo = datosProducto.modelo.trim();
+
+    const marca = datosProducto.marca === undefined ||
+                  datosProducto.marca === null
+        ? null
+        : datosProducto.marca.trim();
+
+    const modelo = datosProducto.modelo === undefined ||
+                   datosProducto.modelo === null
+        ? null
+        : datosProducto.modelo.trim();
+
     const categoria = datosProducto.categoria.trim();
     const precio = datosProducto.precio;
-    const precioAnterior = datosProducto.precioAnterior;
     const stock = datosProducto.stock;
-    const descripcion = datosProducto.descripcion;
-    const imagen = datosProducto.imagen;
+
+    const descripcion = datosProducto.descripcion === undefined
+        ? null
+        : datosProducto.descripcion;
+
+    const imagen = datosProducto.imagen === undefined
+        ? null
+        : datosProducto.imagen;
 
     try {
+
+        // Buscar categoría
+
+        const idCategoria = await buscarCategoria(categoria);
+
+        if (idCategoria === null) {
+
+            return res.status(400).json({
+                mensaje: 'La categoría indicada no existe'
+            });
+        }
 
         // Actualizar producto
 
         const resultado = await pool.query(
             `UPDATE productos
              SET
-                codigo = $1,
-                nombre = $2,
-                marca = $3,
-                modelo = $4,
-                categoria = $5,
-                precio = $6,
-                precio_anterior = $7,
+                id_categoria = $1,
+                sku = $2,
+                nombre = $3,
+                marca = $4,
+                modelo = $5,
+                descripcion = $6,
+                precio_clp = $7,
                 stock = $8,
-                descripcion = $9,
-                imagen = $10
-             WHERE id = $11
-             RETURNING
-                id,
-                codigo,
-                nombre,
-                marca,
-                modelo,
-                categoria,
-                precio,
-                precio_anterior AS "precioAnterior",
-                stock,
-                descripcion,
-                imagen,
-                origen,
-                creado_en`,
+                imagen_url = $9
+             WHERE id_producto = $10
+             RETURNING id_producto`,
             [
+                idCategoria,
                 codigo,
                 nombre,
                 marca,
                 modelo,
-                categoria,
+                descripcion,
                 precio,
-                precioAnterior ?? null,
                 stock,
-                descripcion ?? null,
-                imagen ?? null,
+                imagen,
                 id
             ]
         );
-
-        // Comprobar si existe
 
         if (resultado.rows.length === 0) {
 
@@ -452,22 +493,16 @@ async function modificarProducto(req, res) {
             });
         }
 
-        // Preparar producto actualizado
-
-        const producto = prepararProducto(
-            resultado.rows[0]
-        );
+        const producto = await buscarProductoPorId(id);
 
         return res.status(200).json(producto);
 
     } catch (error) {
 
-        // Restricción de valor único
-
         if (error.code === '23505') {
 
             return res.status(409).json({
-                mensaje: 'Ya existe un producto con ese código o identificador'
+                mensaje: 'Ya existe un producto con ese código'
             });
         }
 
@@ -488,11 +523,7 @@ async function modificarProducto(req, res) {
 
 async function eliminarProducto(req, res) {
 
-    // Obtener identificador
-
     const id = Number(req.params.id);
-
-    // Validar identificador
 
     if (!Number.isSafeInteger(id) || id <= 0) {
 
@@ -503,16 +534,12 @@ async function eliminarProducto(req, res) {
 
     try {
 
-        // Eliminar producto de PostgreSQL
-
         const resultado = await pool.query(
             `DELETE FROM productos
-             WHERE id = $1
-             RETURNING id`,
+             WHERE id_producto = $1
+             RETURNING id_producto`,
             [id]
         );
-
-        // Comprobar si existía
 
         if (resultado.rows.length === 0) {
 
@@ -521,16 +548,12 @@ async function eliminarProducto(req, res) {
             });
         }
 
-        // Confirmar eliminación
-
         return res.status(200).json({
             mensaje: 'Producto eliminado correctamente',
-            id: Number(resultado.rows[0].id)
+            id: Number(resultado.rows[0].id_producto)
         });
 
     } catch (error) {
-
-        // Producto asociado a pedidos
 
         if (error.code === '23503') {
 
@@ -551,9 +574,8 @@ async function eliminarProducto(req, res) {
 }
 
 
-// ==========================================
 // EXPORTAR FUNCIONES
-// ==========================================
+
 
 module.exports = {
     listarProductos: listarProductos,
