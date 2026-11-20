@@ -142,12 +142,6 @@ async function registrarUsuario(req, res) {
 
         transaccionIniciada = true;
 
-        // Evitar que dos registros de esta API
-        // calculen el mismo identificador simultáneamente.
-        await cliente.query(
-            'SELECT pg_advisory_xact_lock(20261120, 1)'
-        );
-
         // COMPROBAR CORREO Y RUN
 
         const conflictos = await cliente.query(
@@ -198,25 +192,11 @@ async function registrarUsuario(req, res) {
 
         const idRolCliente = consultaRol.rows[0].id_rol;
 
-        // GENERAR IDENTIFICADOR
-        // La tabla actual no tiene un valor automático.
-        // Este cálculo es provisional hasta configurar
-        // una secuencia de PostgreSQL compartida.
-
-        const consultaId = await cliente.query(
-            `SELECT COALESCE(MAX(id_usuario), 0) + 1
-                    AS siguiente_id
-             FROM usuarios`
-        );
-
-        const nuevoId = consultaId.rows[0].siguiente_id;
-
         // REGISTRAR USUARIO
 
         const nuevoUsuario = await cliente.query(
             `INSERT INTO usuarios
             (
-                id_usuario,
                 id_rol,
                 run,
                 nombre,
@@ -230,7 +210,7 @@ async function registrarUsuario(req, res) {
             VALUES
             (
                 $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10
+                $6, $7, $8, $9
             )
             RETURNING
                 id_usuario AS id,
@@ -244,7 +224,6 @@ async function registrarUsuario(req, res) {
                 activo,
                 fecha_registro AS creado_en`,
             [
-                nuevoId,
                 idRolCliente,
                 run,
                 nombre.trim(),

@@ -18,6 +18,18 @@ router.get(
 );
 
 // ==========================================
+// CREAR VENDEDOR
+// SOLO ADMINISTRADOR
+// ==========================================
+
+router.post(
+    '/',
+    authMiddleware.verificarToken,
+    authMiddleware.verificarRol(['ADMINISTRADOR']),
+    usuariosController.crearVendedor
+);
+
+// ==========================================
 // CONSULTAR USUARIO POR ID
 // ADMINISTRADOR O PROPIETARIO
 // ==========================================

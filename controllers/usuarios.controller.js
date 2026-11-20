@@ -1,14 +1,16 @@
 
 const pool = require('../db');
-const {
-    LIMITE_NOMBRE,
-    LIMITE_APELLIDO,
-    LIMITE_REGION,
-    LIMITE_COMUNA,
-    LIMITE_DIRECCION,
-    validarCorreo,
-    validarRun
-} = require('../utils/auth.validation');
+const bcrypt = require('bcrypt');
+
+const validaciones = require('../utils/auth.validation');
+const LIMITE_NOMBRE = validaciones.LIMITE_NOMBRE;
+const LIMITE_APELLIDO = validaciones.LIMITE_APELLIDO;
+const LIMITE_REGION = validaciones.LIMITE_REGION;
+const LIMITE_COMUNA = validaciones.LIMITE_COMUNA;
+const LIMITE_DIRECCION = validaciones.LIMITE_DIRECCION;
+const validarCorreo = validaciones.validarCorreo;
+const validarRun = validaciones.validarRun;
+const validarPassword = validaciones.validarPassword;
 
 // ==========================================
 // ROLES PERMITIDOS
@@ -21,6 +23,207 @@ const ROLES_PERMITIDOS = [
 ];
 
 // ==========================================
+// CREAR VENDEDOR
+// SOLO ADMINISTRADOR
+// ==========================================
+
+async function crearVendedor(req, res) {
+    const datosVendedor = req.body || {};
+    const nombre = validaciones.limpiarTexto(datosVendedor.nombre);
+    const apellido = validaciones.limpiarTexto(datosVendedor.apellido);
+    const correo = validaciones.limpiarTexto(datosVendedor.correo);
+    const run = validarRun(datosVendedor.run);
+    const password = datosVendedor.password;
+    const region = validaciones.limpiarTexto(datosVendedor.region);
+    const comuna = validaciones.limpiarTexto(datosVendedor.comuna);
+    const direccion = validaciones.limpiarTexto(datosVendedor.direccion);
+
+    if (
+        typeof nombre !== 'string' ||
+        typeof apellido !== 'string' ||
+        typeof correo !== 'string' ||
+        typeof password !== 'string'
+    ) {
+        return res.status(400).json({
+            mensaje: 'Los datos del vendedor no son válidos'
+        });
+    }
+
+    if (
+        !nombre ||
+        !apellido ||
+        !correo ||
+        nombre.length > LIMITE_NOMBRE ||
+        apellido.length > LIMITE_APELLIDO ||
+        (typeof region === 'string' && region.length > LIMITE_REGION) ||
+        (typeof comuna === 'string' && comuna.length > LIMITE_COMUNA) ||
+        (typeof direccion === 'string' && direccion.length > LIMITE_DIRECCION)
+    ) {
+        return res.status(400).json({
+            mensaje: 'Completa los datos obligatorios del vendedor'
+        });
+    }
+
+    if (!validarRun(datosVendedor.run)) {
+        return res.status(400).json({
+            mensaje: 'El RUN ingresado no es válido'
+        });
+    }
+
+    const correoNormalizado = correo.trim().toLowerCase();
+
+    if (!validarCorreo(correoNormalizado)) {
+        return res.status(400).json({
+            mensaje: 'El correo electrónico no es válido'
+        });
+    }
+
+    if (!validarPassword(password)) {
+        return res.status(400).json({
+            mensaje: 'La contraseña debe tener al menos 8 caracteres'
+        });
+    }
+
+    let cliente = null;
+    let transaccionIniciada = false;
+
+    try {
+        const passwordHash = await bcrypt.hash(password, 12);
+        cliente = await pool.connect();
+
+        await cliente.query('BEGIN');
+        transaccionIniciada = true;
+
+        const conflicto = await cliente.query(
+            `SELECT u.id_usuario, u.correo, u.run
+             FROM usuarios u
+             WHERE LOWER(u.correo) = $1
+                OR UPPER(u.run) = $2`,
+            [correoNormalizado, run]
+        );
+
+        if (conflicto.rows.length > 0) {
+            let correoDuplicado = false;
+
+            for (let indice = 0; indice < conflicto.rows.length; indice += 1) {
+                const usuarioConflicto = conflicto.rows[indice];
+
+                if (
+                    usuarioConflicto.correo &&
+                    usuarioConflicto.correo.toLowerCase() === correoNormalizado
+                ) {
+                    correoDuplicado = true;
+                    break;
+                }
+            }
+
+            await cliente.query('ROLLBACK');
+            transaccionIniciada = false;
+
+            return res.status(409).json({
+                mensaje: correoDuplicado
+                    ? 'El correo electrónico ya está registrado'
+                    : 'El RUN ya está registrado'
+            });
+        }
+
+        const consultaRol = await cliente.query(
+            `SELECT id_rol
+             FROM roles
+             WHERE id_rol = 2
+               AND nombre = 'VENDEDOR'`
+        );
+
+        if (consultaRol.rows.length === 0) {
+            throw new Error('No existe el rol VENDEDOR');
+        }
+
+        const nuevoVendedor = await cliente.query(
+            `INSERT INTO usuarios
+             (
+                id_rol,
+                run,
+                nombre,
+                apellido,
+                correo,
+                password_hash,
+                activo,
+                region,
+                comuna,
+                direccion
+             )
+             VALUES
+             (
+                2, $1, $2, $3, $4,
+                $5, 1, $6, $7, $8
+             )
+             RETURNING
+                id_usuario AS id,
+                nombre,
+                apellido,
+                correo AS email,
+                run,
+                activo,
+                region,
+                comuna,
+                direccion,
+                fecha_registro AS creado_en`,
+            [
+                run,
+                nombre,
+                apellido,
+                correoNormalizado,
+                passwordHash,
+                typeof region === 'string' ? region : null,
+                typeof comuna === 'string' ? comuna : null,
+                typeof direccion === 'string' ? direccion : null
+            ]
+        );
+
+        await cliente.query('COMMIT');
+        transaccionIniciada = false;
+
+        const vendedor = nuevoVendedor.rows[0];
+        vendedor.rol = 'VENDEDOR';
+
+        return res.status(201).json({
+            mensaje: 'Vendedor creado correctamente',
+            usuario: vendedor
+        });
+    } catch (error) {
+        if (cliente && transaccionIniciada) {
+            try {
+                await cliente.query('ROLLBACK');
+            } catch (errorRollback) {
+                console.error(
+                    'Error al revertir la creación del vendedor:',
+                    errorRollback.message
+                );
+            }
+        }
+
+        console.error(
+            'Error al crear vendedor:',
+            error.message
+        );
+
+        if (error.code === '23505') {
+            return res.status(409).json({
+                mensaje: 'El RUN o el correo electrónico ya está registrado'
+            });
+        }
+
+        return res.status(500).json({
+            mensaje: 'No fue posible crear el vendedor'
+        });
+    } finally {
+        if (cliente) {
+            cliente.release();
+        }
+    }
+}
+
+// ==========================================
 // LISTAR USUARIOS
 // SOLO ADMINISTRADOR
 // ==========================================
@@ -29,20 +232,22 @@ async function listarUsuarios(req, res) {
     try {
         const resultado = await pool.query(
             `SELECT
-                id,
-                nombre,
-                apellido,
-                email,
-                rol,
-                activo,
-                creado_en,
-                actualizado_en,
-                run,
-                region,
-                comuna,
-                direccion
-             FROM usuarios
-             ORDER BY id`
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.fecha_registro AS creado_en,
+                u.fecha_actualizacion AS actualizado_en,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             ORDER BY u.id_usuario`
         );
 
         return res.status(200).json({
@@ -92,20 +297,22 @@ async function obtenerUsuarioPorId(req, res) {
     try {
         const resultado = await pool.query(
             `SELECT
-                id,
-                nombre,
-                apellido,
-                email,
-                rol,
-                activo,
-                creado_en,
-                actualizado_en,
-                run,
-                region,
-                comuna,
-                direccion
-             FROM usuarios
-             WHERE id = $1`,
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.fecha_registro AS creado_en,
+                u.fecha_actualizacion AS actualizado_en,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             WHERE u.id_usuario = $1`,
             [idUsuario]
         );
 
@@ -180,18 +387,20 @@ async function actualizarUsuario(req, res) {
     try {
         const consultaUsuario = await pool.query(
             `SELECT
-                id,
-                nombre,
-                apellido,
-                email,
-                rol,
-                activo,
-                run,
-                region,
-                comuna,
-                direccion
-             FROM usuarios
-             WHERE id = $1`,
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             WHERE u.id_usuario = $1`,
             [idUsuario]
         );
 
@@ -203,7 +412,7 @@ async function actualizarUsuario(req, res) {
 
         const usuarioActual = consultaUsuario.rows[0];
 
-        if (usuarioActual.activo === false) {
+        if (Number(usuarioActual.activo) !== 1) {
             return res.status(409).json({
                 mensaje: 'No se puede modificar un usuario desactivado'
             });
@@ -294,37 +503,39 @@ async function actualizarUsuario(req, res) {
             });
         }
 
+        const consultaRol = await pool.query(
+            `SELECT id_rol
+             FROM roles
+             WHERE nombre = $1`,
+            [rolFinal]
+        );
+
+        if (consultaRol.rows.length === 0) {
+            return res.status(400).json({
+                mensaje: 'El rol ingresado no existe'
+            });
+        }
+
+        const idRolFinal = consultaRol.rows[0].id_rol;
+
         const resultado = await pool.query(
             `UPDATE usuarios
              SET nombre = $1,
                  apellido = $2,
-                 email = $3,
-                 rol = $4,
+                 correo = $3,
+                 id_rol = $4,
                  run = $5,
                  region = $6,
                  comuna = $7,
                  direccion = $8,
-                 actualizado_en = CURRENT_TIMESTAMP
-             WHERE id = $9
-               AND activo = TRUE
-             RETURNING
-                id,
-                nombre,
-                apellido,
-                email,
-                rol,
-                activo,
-                creado_en,
-                actualizado_en,
-                run,
-                region,
-                comuna,
-                direccion`,
+                 fecha_actualizacion = CURRENT_TIMESTAMP
+             WHERE id_usuario = $9
+               AND activo = 1`,
             [
                 nombreFinal,
                 apellidoFinal,
                 correo,
-                rolFinal,
+                idRolFinal,
                 run,
                 regionFinal,
                 comunaFinal,
@@ -333,15 +544,36 @@ async function actualizarUsuario(req, res) {
             ]
         );
 
-        if (resultado.rows.length === 0) {
+        if (resultado.rowCount === 0) {
             return res.status(409).json({
                 mensaje: 'No fue posible actualizar el usuario'
             });
         }
 
+        const usuarioActualizado = await pool.query(
+            `SELECT
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.fecha_registro AS creado_en,
+                u.fecha_actualizacion AS actualizado_en,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             WHERE u.id_usuario = $1`,
+            [idUsuario]
+        );
+
         return res.status(200).json({
             mensaje: 'Usuario actualizado correctamente',
-            usuario: resultado.rows[0]
+            usuario: usuarioActualizado.rows[0]
         });
 
     } catch (error) {
@@ -390,31 +622,18 @@ async function desactivarUsuario(req, res) {
     try {
         const resultado = await pool.query(
             `UPDATE usuarios
-             SET activo = FALSE,
-                 actualizado_en = CURRENT_TIMESTAMP
-             WHERE id = $1
-               AND activo = TRUE
-             RETURNING
-                id,
-                nombre,
-                apellido,
-                email,
-                rol,
-                activo,
-                creado_en,
-                actualizado_en,
-                run,
-                region,
-                comuna,
-                direccion`,
+             SET activo = 0,
+                 fecha_actualizacion = CURRENT_TIMESTAMP
+             WHERE id_usuario = $1
+               AND activo = 1`,
             [idUsuario]
         );
 
-        if (resultado.rows.length === 0) {
+        if (resultado.rowCount === 0) {
             const consultaUsuario = await pool.query(
-                `SELECT id, activo
+                `SELECT id_usuario AS id, activo
                  FROM usuarios
-                 WHERE id = $1`,
+                 WHERE id_usuario = $1`,
                 [idUsuario]
             );
 
@@ -429,9 +648,30 @@ async function desactivarUsuario(req, res) {
             });
         }
 
+        const usuarioDesactivado = await pool.query(
+            `SELECT
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.fecha_registro AS creado_en,
+                u.fecha_actualizacion AS actualizado_en,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             WHERE u.id_usuario = $1`,
+            [idUsuario]
+        );
+
         return res.status(200).json({
             mensaje: 'Usuario desactivado correctamente',
-            usuario: resultado.rows[0]
+            usuario: usuarioDesactivado.rows[0]
         });
 
     } catch (error) {
@@ -452,6 +692,7 @@ async function desactivarUsuario(req, res) {
 
 module.exports = {
     listarUsuarios: listarUsuarios,
+    crearVendedor: crearVendedor,
     obtenerUsuarioPorId: obtenerUsuarioPorId,
     actualizarUsuario: actualizarUsuario,
     desactivarUsuario: desactivarUsuario

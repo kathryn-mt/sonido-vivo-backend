@@ -4,6 +4,7 @@ const LIMITE_EMAIL = 255;
 const LIMITE_REGION = 100;
 const LIMITE_COMUNA = 100;
 const LIMITE_DIRECCION = 300;
+const LIMITE_PASSWORD = 128;
 
 function limpiarTexto(valor) {
     return typeof valor === 'string' ? valor.trim() : valor;
@@ -74,7 +75,10 @@ function validarRun(valor) {
 }
 
 function validarPassword(password) {
-    return typeof password === 'string' && password.length >= 8;
+    return typeof password === 'string'
+        && password.trim().length >= 8
+        && password.length >= 8
+        && password.length <= LIMITE_PASSWORD;
 }
 
 module.exports = {
@@ -84,6 +88,7 @@ module.exports = {
     LIMITE_REGION,
     LIMITE_COMUNA,
     LIMITE_DIRECCION,
+    LIMITE_PASSWORD,
     limpiarTexto,
     validarCorreo,
     normalizarRun,
