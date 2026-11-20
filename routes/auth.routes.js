@@ -24,6 +24,25 @@ router.post(
 );
 
 // ==========================================
+// INICIO DE SESIÓN PERSONAL
+// ==========================================
+
+router.post(
+    '/login-personal',
+    authController.iniciarSesionPersonal
+);
+
+// ==========================================
+// CAMBIAR CONTRASEÑA
+// ==========================================
+
+router.patch(
+    '/cambiar-password',
+    authMiddleware.verificarToken,
+    authController.cambiarPassword
+);
+
+// ==========================================
 // CONSULTAR PERFIL
 // ==========================================
 
