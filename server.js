@@ -3,6 +3,7 @@ const express = require('express');
 const authRoutes = require('./routes/auth.routes');
 const usuariosRoutes = require('./routes/usuarios.routes');
 const productosRoutes = require('./routes/productos.routes');
+const swaggerDocs = require('./docs/swagger');
 
 
 const app = express();
@@ -12,6 +13,8 @@ const PORT = 3000;
 
 
 app.use(express.json());
+
+swaggerDocs.register(app);
 
 
 // RUTAS DE AUTENTICACIÓN - NOEMÍ //

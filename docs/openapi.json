@@ -1,0 +1,1549 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sonido Vivo API",
+    "description": "Documentación viva de autenticación y gestión de usuarios. Las rutas de productos y pedidos no forman parte de esta especificación todavía.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Servidor actual; Swagger conserva el mismo origen y puerto."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticación",
+      "description": "Registro, inicio de sesión y acceso a perfiles."
+    },
+    {
+      "name": "Usuarios",
+      "description": "Gestión administrativa y actualización de perfiles propios."
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/registro": {
+      "post": {
+        "tags": ["Autenticación"],
+        "operationId": "registrarCliente",
+        "summary": "Registrar un cliente",
+        "description": "Registra una cuenta con rol CLIENTE asignado por el servidor. Todos los campos indicados son obligatorios.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroCliente"
+              },
+              "example": {
+                "nombre": "Ana",
+                "apellido": "Ejemplo",
+                "email": "cliente@example.com",
+                "run": "12.345.678-5",
+                "region": "Metropolitana",
+                "comuna": "Santiago",
+                "direccion": "Calle de ejemplo 123",
+                "password": "Ejemplo123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cliente registrado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroClienteRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuario registrado correctamente",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "run": "123456785",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123",
+                    "activo": 1,
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "rol": "CLIENTE"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campos obligatorios ausentes, formato inválido o límites excedidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Los datos ingresados no son válidos"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El correo o RUN ya está registrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El correo ya está registrado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno al registrar el usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Error interno al registrar usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Autenticación"],
+        "operationId": "iniciarSesionCliente",
+        "summary": "Iniciar sesión de cliente",
+        "description": "Autentica cuentas CLIENTE utilizando correo electrónico y contraseña.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginCliente"
+              },
+              "example": {
+                "email": "cliente@example.com",
+                "password": "Ejemplo123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inicio de sesión exitoso; se entrega un JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginRespuesta"
+                },
+                "example": {
+                  "mensaje": "Inicio de sesión exitoso",
+                  "token": "token-ficticio-no-utilizable",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "rol": "CLIENTE"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falta correo o contraseña.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Debes ingresar correo y contraseña"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas o se debe utilizar el acceso para personal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Credenciales incorrectas"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno o configuración JWT incompleta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Error interno al iniciar sesión"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login-personal": {
+      "post": {
+        "tags": ["Autenticación"],
+        "operationId": "iniciarSesionPersonal",
+        "summary": "Iniciar sesión de personal",
+        "description": "Autentica cuentas VENDEDOR o ADMINISTRADOR mediante RUN y contraseña.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginPersonal"
+              },
+              "example": {
+                "run": "12.345.678-5",
+                "password": "Ejemplo123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inicio de sesión exitoso; se entrega un JWT.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginRespuesta"
+                },
+                "example": {
+                  "mensaje": "Inicio de sesión exitoso",
+                  "token": "token-ficticio-no-utilizable",
+                  "usuario": {
+                    "id": 102,
+                    "nombre": "Vendedor",
+                    "apellido": "Ejemplo",
+                    "email": "vendedor@example.com",
+                    "rol": "VENDEDOR"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "RUN o contraseña inválidos, cuenta inactiva o usuario sin rol de personal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Credenciales incorrectas"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno o configuración JWT incompleta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Error interno al iniciar sesión"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/cambiar-password": {
+      "patch": {
+        "tags": ["Autenticación"],
+        "operationId": "cambiarPassword",
+        "summary": "Cambiar la contraseña propia",
+        "description": "Requiere JWT. La contraseña nueva debe tener entre 8 y 128 caracteres y ser diferente a la actual.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambioPassword"
+              },
+              "example": {
+                "passwordActual": "Anterior123",
+                "passwordNueva": "NuevaClave123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contraseña cambiada correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Contraseña cambiada correctamente"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Faltan contraseñas, la nueva es inválida o no difiere de la actual.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "La contraseña nueva debe tener al menos 8 caracteres"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente/inválido/vencido, cuenta inactiva o contraseña actual incorrecta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "La contraseña actual no es correcta"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuario autenticado no encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Usuario no encontrado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno al cambiar la contraseña.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible cambiar la contraseña"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/perfil": {
+      "get": {
+        "tags": ["Autenticación"],
+        "operationId": "consultarPerfil",
+        "summary": "Consultar identidad autenticada",
+        "description": "Requiere JWT válido. Devuelve únicamente el ID y rol incluidos en el token.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Acceso autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilRespuesta"
+                },
+                "example": {
+                  "mensaje": "Acceso autorizado",
+                  "usuario": {
+                    "id": "101",
+                    "rol": "CLIENTE"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Debes proporcionar un token de autenticación"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error de configuración si JWT_SECRET no está configurada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Error de configuración del servidor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/administracion": {
+      "get": {
+        "tags": ["Autenticación"],
+        "operationId": "accederAdministracion",
+        "summary": "Verificar acceso de administrador",
+        "description": "Requiere JWT válido y rol ADMINISTRADOR.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Acceso administrativo autorizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilRespuesta"
+                },
+                "example": {
+                  "mensaje": "Bienvenido al panel de administración",
+                  "usuario": {
+                    "id": "1",
+                    "rol": "ADMINISTRADOR"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Token inválido"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario autenticado no tiene rol ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permisos para acceder a este recurso"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error de configuración si JWT_SECRET no está configurada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Error de configuración del servidor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios": {
+      "get": {
+        "tags": ["Usuarios"],
+        "operationId": "listarUsuarios",
+        "summary": "Listar usuarios",
+        "description": "Solo ADMINISTRADOR. La respuesta incluye los datos públicos de cada cuenta.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuarios consultados correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListaUsuariosRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuarios consultados correctamente",
+                  "total": 1,
+                  "usuarios": [
+                    {
+                      "id": 101,
+                      "nombre": "Ana",
+                      "apellido": "Ejemplo",
+                      "email": "cliente@example.com",
+                      "rol": "CLIENTE",
+                      "activo": 1,
+                      "creado_en": "2026-01-15T12:00:00.000Z",
+                      "actualizado_en": "2026-01-15T12:00:00.000Z",
+                      "run": "123456785",
+                      "region": "Metropolitana",
+                      "comuna": "Santiago",
+                      "direccion": "Calle de ejemplo 123"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Debes proporcionar un token de autenticación"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario no tiene rol ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permisos para acceder a este recurso"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible consultar los usuarios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible consultar los usuarios"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Usuarios"],
+        "operationId": "crearVendedor",
+        "summary": "Registrar un vendedor",
+        "description": "Solo ADMINISTRADOR. El rol VENDEDOR y el estado activo son asignados por el servidor.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearVendedor"
+              },
+              "example": {
+                "nombre": "Vendedor",
+                "apellido": "Ejemplo",
+                "correo": "vendedor@example.com",
+                "run": "12.345.678-5",
+                "password": "Ejemplo123",
+                "region": "Metropolitana",
+                "comuna": "Santiago",
+                "direccion": "Calle de ejemplo 456"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Vendedor creado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrearVendedorRespuesta"
+                },
+                "example": {
+                  "mensaje": "Vendedor creado correctamente",
+                  "usuario": {
+                    "id": 102,
+                    "nombre": "Vendedor",
+                    "apellido": "Ejemplo",
+                    "email": "vendedor@example.com",
+                    "run": "123456785",
+                    "activo": 1,
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 456",
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "rol": "VENDEDOR"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos obligatorios, RUN, correo o contraseña inválidos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El RUN ingresado no es válido"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Token inválido"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario no tiene rol ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permisos para acceder a este recurso"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El RUN o correo ya está registrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El RUN o el correo electrónico ya está registrado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible crear el vendedor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible crear el vendedor"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/usuarios/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID de usuario entero positivo.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "example": 101
+        }
+      ],
+      "get": {
+        "tags": ["Usuarios"],
+        "operationId": "obtenerUsuario",
+        "summary": "Consultar un usuario",
+        "description": "Requiere JWT. Solo ADMINISTRADOR o el propietario de la cuenta.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuario consultado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuario consultado correctamente",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "rol": "CLIENTE",
+                    "activo": 1,
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "actualizado_en": "2026-01-15T12:00:00.000Z",
+                    "run": "123456785",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El ID no es válido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El ID del usuario no es válido"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario autenticado no es administrador ni propietario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permiso para consultar este usuario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuario no encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Usuario no encontrado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible consultar el usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible consultar el usuario"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Usuarios"],
+        "operationId": "actualizarUsuario",
+        "summary": "Actualizar un usuario",
+        "description": "Requiere JWT. ADMINISTRADOR puede actualizar los campos de perfil documentados. CLIENTE y VENDEDOR solo pueden modificar su propia cuenta y únicamente nombre, apellido, region, comuna y direccion. RUN, email/correo, rol, id_rol, activo, password_hash, password e id_usuario no se pueden modificar como propietario. La contraseña se cambia en PATCH /api/v1/auth/cambiar-password.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ActualizarPerfilPropio"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActualizarUsuarioAdministrador"
+                  }
+                ]
+              },
+              "examples": {
+                "perfilPropio": {
+                  "summary": "Campos permitidos para actualizar el perfil propio",
+                  "value": {
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123"
+                  }
+                },
+                "administrador": {
+                  "summary": "Ejemplo de actualización administrativa",
+                  "value": {
+                    "email": "cliente.actualizado@example.com",
+                    "run": "12.345.678-5",
+                    "rol": "CLIENTE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Usuario actualizado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuario actualizado correctamente",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "rol": "CLIENTE",
+                    "activo": 1,
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "actualizado_en": "2026-01-16T12:00:00.000Z",
+                    "run": "123456785",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ID, formato, longitud o contenido de un campo inválido; un administrador tampoco puede cambiar su propio rol.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Los datos ingresados no son válidos"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Usuario sin permiso para modificar la cuenta o campos restringidos en actualización de perfil propio.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No puedes modificar tu RUN ni tu correo electrónico"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuario no encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Usuario no encontrado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cuenta desactivada, RUN o correo duplicado, o no fue posible completar la actualización.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No se puede modificar un usuario desactivado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible actualizar el usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible actualizar el usuario"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Usuarios"],
+        "operationId": "desactivarUsuario",
+        "summary": "Desactivar un usuario",
+        "description": "Solo ADMINISTRADOR. Realiza una desactivación lógica (activo = 0); no elimina físicamente el registro. El administrador no puede desactivar su propia cuenta.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuario desactivado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuario desactivado correctamente",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "rol": "CLIENTE",
+                    "activo": 0,
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "actualizado_en": "2026-01-16T12:00:00.000Z",
+                    "run": "123456785",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ID inválido o intento de desactivar la propia cuenta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El ID del usuario no es válido"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario no tiene rol ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permisos para acceder a este recurso"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuario no encontrado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Usuario no encontrado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El usuario ya se encuentra desactivado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El usuario ya se encuentra desactivado"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible desactivar el usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible desactivar el usuario"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Introduce el JWT recibido al iniciar sesión. No uses credenciales reales en ejemplos o capturas."
+      }
+    },
+    "schemas": {
+      "Mensaje": {
+        "type": "object",
+        "required": ["mensaje"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          }
+        }
+      },
+      "Identidad": {
+        "type": "object",
+        "required": ["id", "nombre", "apellido", "email", "rol"],
+        "properties": {
+          "id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "apellido": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "rol": {
+            "type": "string",
+            "enum": ["CLIENTE", "VENDEDOR", "ADMINISTRADOR"]
+          }
+        }
+      },
+      "Usuario": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Identidad"
+          },
+          {
+            "type": "object",
+            "required": ["activo", "creado_en", "run"],
+            "properties": {
+              "activo": {
+                "type": "integer",
+                "enum": [0, 1]
+              },
+              "creado_en": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "actualizado_en": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "run": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string",
+                "nullable": true
+              },
+              "comuna": {
+                "type": "string",
+                "nullable": true
+              },
+              "direccion": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "RegistroCliente": {
+        "type": "object",
+        "required": [
+          "nombre",
+          "apellido",
+          "email",
+          "run",
+          "region",
+          "comuna",
+          "direccion",
+          "password"
+        ],
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "run": {
+            "type": "string",
+            "description": "RUN chileno válido; se normaliza al almacenarse."
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "comuna": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginCliente": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginPersonal": {
+        "type": "object",
+        "required": ["run", "password"],
+        "properties": {
+          "run": {
+            "type": "string",
+            "description": "RUN chileno válido."
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CambioPassword": {
+        "type": "object",
+        "required": ["passwordActual", "passwordNueva"],
+        "properties": {
+          "passwordActual": {
+            "type": "string",
+            "format": "password"
+          },
+          "passwordNueva": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "CrearVendedor": {
+        "type": "object",
+        "required": ["nombre", "apellido", "correo", "run", "password"],
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "run": {
+            "type": "string",
+            "description": "RUN chileno válido."
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "maxLength": 128
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "comuna": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActualizarPerfilPropio": {
+        "type": "object",
+        "description": "CLIENTE y VENDEDOR pueden enviar únicamente estos campos al modificar su cuenta.",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "comuna": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActualizarUsuarioAdministrador": {
+        "type": "object",
+        "description": "ADMINISTRADOR puede modificar nombre, apellido, email, run, rol, region, comuna y direccion. activo e id_rol no se modifican por este endpoint.",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "apellido": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "run": {
+            "type": "string",
+            "description": "RUN chileno válido."
+          },
+          "rol": {
+            "type": "string",
+            "enum": ["ADMINISTRADOR", "VENDEDOR", "CLIENTE"]
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "comuna": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "direccion": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      },
+      "LoginRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "token", "usuario"],
+        "properties": {
+          "mensaje": {
+            "type": "string",
+            "example": "Inicio de sesión exitoso"
+          },
+          "token": {
+            "type": "string",
+            "description": "JWT emitido por el servidor; el valor de ejemplo no es un token utilizable."
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/Identidad"
+          }
+        }
+      },
+      "RegistroClienteRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "usuario"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "usuario": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Usuario"
+              },
+              {
+                "type": "object",
+                "required": ["rol"]
+              }
+            ]
+          }
+        }
+      },
+      "CrearVendedorRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "usuario"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "usuario": {
+            "type": "object",
+            "required": [
+              "id",
+              "nombre",
+              "apellido",
+              "email",
+              "run",
+              "activo",
+              "region",
+              "comuna",
+              "direccion",
+              "creado_en",
+              "rol"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": "string"
+              },
+              "apellido": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "run": {
+                "type": "string"
+              },
+              "activo": {
+                "type": "integer",
+                "enum": [0, 1]
+              },
+              "region": {
+                "type": "string",
+                "nullable": true
+              },
+              "comuna": {
+                "type": "string",
+                "nullable": true
+              },
+              "direccion": {
+                "type": "string",
+                "nullable": true
+              },
+              "creado_en": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "rol": {
+                "type": "string",
+                "enum": ["VENDEDOR"]
+              }
+            }
+          }
+        }
+      },
+      "UsuarioRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "usuario"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/Usuario"
+          }
+        }
+      },
+      "ListaUsuariosRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "total", "usuarios"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "usuarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Usuario"
+            }
+          }
+        }
+      },
+      "PerfilRespuesta": {
+        "type": "object",
+        "required": ["mensaje", "usuario"],
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          },
+          "usuario": {
+            "type": "object",
+            "required": ["id", "rol"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "rol": {
+                "type": "string",
+                "enum": ["CLIENTE", "VENDEDOR", "ADMINISTRADOR"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
