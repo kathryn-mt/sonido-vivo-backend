@@ -420,6 +420,313 @@ test('actualizar usuario utiliza fecha_actualizacion', async () => {
     }
 });
 
+test('cliente puede actualizar su nombre y direccion sin cambiar campos restringidos', async () => {
+    const consultas = [];
+    const queryOriginal = pool.query;
+
+    pool.query = async function(sql) {
+        consultas.push(sql);
+
+        if (sql.includes('FROM usuarios u')) {
+            return {
+                rows: [{
+                    id: 42,
+                    nombre: 'Nombre anterior',
+                    apellido: 'Prueba',
+                    email: 'cliente@example.com',
+                    rol: 'CLIENTE',
+                    activo: 1,
+                    run: '123456785',
+                    region: 'Metropolitana',
+                    comuna: 'Santiago',
+                    direccion: 'Direccion anterior'
+                }]
+            };
+        }
+
+        if (sql.includes('UPDATE usuarios')) {
+            return { rowCount: 1 };
+        }
+
+        return { rows: [] };
+    };
+
+    try {
+        const req = {
+            params: { id: '42' },
+            usuario: { id: '42', rol: 'CLIENTE' },
+            body: {
+                nombre: 'Nombre nuevo',
+                direccion: 'Direccion nueva'
+            }
+        };
+        const res = crearRespuesta();
+
+        await usuariosController.actualizarUsuario(req, res);
+
+        assert.equal(res.codigo, 200);
+        const consultaActualizacion = consultas.find(function(sql) {
+            return sql.includes('UPDATE usuarios');
+        });
+        assert.equal(consultaActualizacion.includes('nombre = $1'), true);
+        assert.equal(consultaActualizacion.includes('direccion = $5'), true);
+        assert.equal(consultaActualizacion.includes('correo ='), false);
+        assert.equal(consultaActualizacion.includes('run ='), false);
+        assert.equal(consultaActualizacion.includes('id_rol ='), false);
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('cliente puede actualizar apellido, region y comuna', async () => {
+    const consultas = [];
+    const queryOriginal = pool.query;
+
+    pool.query = async function(sql, valores) {
+        consultas.push({
+            sql: sql,
+            valores: valores
+        });
+
+        if (sql.includes('FROM usuarios u')) {
+            return {
+                rows: [{
+                    id: 42,
+                    nombre: 'Cliente',
+                    apellido: 'Anterior',
+                    email: 'cliente@example.com',
+                    rol: 'CLIENTE',
+                    activo: 1,
+                    run: '123456785',
+                    region: 'Region anterior',
+                    comuna: 'Comuna anterior',
+                    direccion: 'Calle Ficticia 123'
+                }]
+            };
+        }
+
+        if (sql.includes('UPDATE usuarios')) {
+            return { rowCount: 1 };
+        }
+
+        return { rows: [] };
+    };
+
+    try {
+        const req = {
+            params: { id: '42' },
+            usuario: { id: '42', rol: 'CLIENTE' },
+            body: {
+                apellido: 'Apellido nuevo',
+                region: 'Region nueva',
+                comuna: 'Comuna nueva'
+            }
+        };
+        const res = crearRespuesta();
+
+        await usuariosController.actualizarUsuario(req, res);
+
+        assert.equal(res.codigo, 200);
+        const consultaActualizacion = consultas.find(function(consulta) {
+            return consulta.sql.includes('UPDATE usuarios');
+        });
+        assert.equal(consultaActualizacion.sql.includes('apellido = $2'), true);
+        assert.equal(consultaActualizacion.sql.includes('region = $3'), true);
+        assert.equal(consultaActualizacion.sql.includes('comuna = $4'), true);
+        assert.equal(consultaActualizacion.valores[1], 'Apellido nuevo');
+        assert.equal(consultaActualizacion.valores[2], 'Region nueva');
+        assert.equal(consultaActualizacion.valores[3], 'Comuna nueva');
+        assert.equal(
+            consultaActualizacion.sql.includes(
+                'fecha_actualizacion = CURRENT_TIMESTAMP'
+            ),
+            true
+        );
+        assert.equal(consultaActualizacion.sql.includes('correo ='), false);
+        assert.equal(consultaActualizacion.sql.includes('run ='), false);
+        assert.equal(consultaActualizacion.sql.includes('id_rol ='), false);
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('cliente no puede modificar RUN ni correo', async () => {
+    const queryOriginal = pool.query;
+
+    pool.query = async function() {
+        assert.fail('No debe consultar ni actualizar la base de datos');
+    };
+
+    try {
+        for (const campo of ['run', 'email', 'correo']) {
+            const cuerpo = {};
+            cuerpo[campo] = campo === 'run' ? '123456785' : 'nuevo@example.com';
+            const req = {
+                params: { id: '42' },
+                usuario: { id: '42', rol: 'CLIENTE' },
+                body: cuerpo
+            };
+            const res = crearRespuesta();
+
+            await usuariosController.actualizarUsuario(req, res);
+
+            assert.equal(res.codigo, 403);
+            assert.match(res.cuerpo.mensaje, /RUN|correo electrónico/);
+        }
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('cliente no puede modificar su rol ni otros campos sensibles', async () => {
+    const queryOriginal = pool.query;
+
+    pool.query = async function() {
+        assert.fail('No debe consultar ni actualizar la base de datos');
+    };
+
+    try {
+        for (const campo of [
+            'rol',
+            'id_rol',
+            'activo',
+            'password_hash',
+            'password',
+            'id_usuario'
+        ]) {
+            const cuerpo = {};
+            cuerpo[campo] = 'valor';
+            const req = {
+                params: { id: '42' },
+                usuario: { id: '42', rol: 'CLIENTE' },
+                body: cuerpo
+            };
+            const res = crearRespuesta();
+
+            await usuariosController.actualizarUsuario(req, res);
+
+            assert.equal(res.codigo, 403, 'campo rechazado: ' + campo);
+        }
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('cliente no puede modificar cuentas ajenas', async () => {
+    const queryOriginal = pool.query;
+
+    pool.query = async function() {
+        assert.fail('No debe consultar ni actualizar la base de datos');
+    };
+
+    try {
+        const req = {
+            params: { id: '43' },
+            usuario: { id: '42', rol: 'CLIENTE' },
+            body: { nombre: 'Cambio no autorizado' }
+        };
+        const res = crearRespuesta();
+
+        await usuariosController.actualizarUsuario(req, res);
+
+        assert.equal(res.codigo, 403);
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('vendedor no puede modificar RUN, correo, rol ni estado de cuenta', async () => {
+    const queryOriginal = pool.query;
+
+    pool.query = async function() {
+        assert.fail('No debe consultar ni actualizar la base de datos');
+    };
+
+    try {
+        for (const campo of ['run', 'email', 'rol', 'activo']) {
+            const cuerpo = {};
+            cuerpo[campo] = 'valor';
+            const req = {
+                params: { id: '42' },
+                usuario: { id: '42', rol: 'VENDEDOR' },
+                body: cuerpo
+            };
+            const res = crearRespuesta();
+
+            await usuariosController.actualizarUsuario(req, res);
+
+            assert.equal(res.codigo, 403, 'campo rechazado: ' + campo);
+        }
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
+test('administrador conserva la capacidad existente de actualizar otra cuenta', async () => {
+    const consultas = [];
+    const queryOriginal = pool.query;
+
+    pool.query = async function(sql) {
+        consultas.push(sql);
+
+        if (sql.includes('FROM usuarios u')) {
+            return {
+                rows: [{
+                    id: 42,
+                    nombre: 'Cliente',
+                    apellido: 'Prueba',
+                    email: 'cliente@example.com',
+                    rol: 'CLIENTE',
+                    activo: 1,
+                    run: '123456785',
+                    region: 'Metropolitana',
+                    comuna: 'Santiago',
+                    direccion: 'Calle Ficticia 123'
+                }]
+            };
+        }
+
+        if (sql.includes('FROM roles')) {
+            return { rows: [{ id_rol: 2 }] };
+        }
+
+        if (sql.includes('UPDATE usuarios')) {
+            return { rowCount: 1 };
+        }
+
+        return { rows: [] };
+    };
+
+    try {
+        const req = {
+            params: { id: '42' },
+            usuario: { id: '1', rol: 'ADMINISTRADOR' },
+            body: {
+                nombre: 'Cliente actualizado',
+                email: 'nuevo@example.com',
+                run: '12.345.678-5',
+                rol: 'VENDEDOR'
+            }
+        };
+        const res = crearRespuesta();
+
+        await usuariosController.actualizarUsuario(req, res);
+
+        assert.equal(res.codigo, 200);
+        assert.equal(
+            consultas.some(function(sql) {
+                return sql.includes('UPDATE usuarios') &&
+                    sql.includes('correo = $3') &&
+                    sql.includes('id_rol = $4') &&
+                    sql.includes('run = $5');
+            }),
+            true
+        );
+    } finally {
+        pool.query = queryOriginal;
+    }
+});
+
 test('desactivar usuario utiliza fecha_actualizacion', async () => {
     const consultas = [];
     const queryOriginal = pool.query;

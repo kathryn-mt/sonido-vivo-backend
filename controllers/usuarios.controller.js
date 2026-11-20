@@ -366,6 +366,37 @@ async function actualizarUsuario(req, res) {
         });
     }
 
+    if (esPropietario && !esAdministrador) {
+        const camposPermitidos = [
+            'nombre',
+            'apellido',
+            'region',
+            'comuna',
+            'direccion'
+        ];
+        const camposEnviados = Object.keys(datosUsuario);
+
+        for (let indice = 0; indice < camposEnviados.length; indice += 1) {
+            const campo = camposEnviados[indice];
+
+            if (
+                campo === 'run' ||
+                campo === 'email' ||
+                campo === 'correo'
+            ) {
+                return res.status(403).json({
+                    mensaje: 'No puedes modificar tu RUN ni tu correo electrónico'
+                });
+            }
+
+            if (!camposPermitidos.includes(campo)) {
+                return res.status(403).json({
+                    mensaje: 'No tienes permiso para modificar el campo ' + campo
+                });
+            }
+        }
+    }
+
     if (
         datosUsuario.rol !== undefined &&
         !esAdministrador
@@ -503,46 +534,74 @@ async function actualizarUsuario(req, res) {
             });
         }
 
-        const consultaRol = await pool.query(
-            `SELECT id_rol
-             FROM roles
-             WHERE nombre = $1`,
-            [rolFinal]
-        );
+        let idRolFinal = null;
 
-        if (consultaRol.rows.length === 0) {
-            return res.status(400).json({
-                mensaje: 'El rol ingresado no existe'
-            });
+        if (!esPropietario || esAdministrador) {
+            const consultaRol = await pool.query(
+                `SELECT id_rol
+                 FROM roles
+                 WHERE nombre = $1`,
+                [rolFinal]
+            );
+
+            if (consultaRol.rows.length === 0) {
+                return res.status(400).json({
+                    mensaje: 'El rol ingresado no existe'
+                });
+            }
+
+            idRolFinal = consultaRol.rows[0].id_rol;
         }
 
-        const idRolFinal = consultaRol.rows[0].id_rol;
+        let resultado = null;
 
-        const resultado = await pool.query(
-            `UPDATE usuarios
-             SET nombre = $1,
-                 apellido = $2,
-                 correo = $3,
-                 id_rol = $4,
-                 run = $5,
-                 region = $6,
-                 comuna = $7,
-                 direccion = $8,
-                 fecha_actualizacion = CURRENT_TIMESTAMP
-             WHERE id_usuario = $9
-               AND activo = 1`,
-            [
-                nombreFinal,
-                apellidoFinal,
-                correo,
-                idRolFinal,
-                run,
-                regionFinal,
-                comunaFinal,
-                direccionFinal,
-                idUsuario
-            ]
-        );
+        if (esPropietario && !esAdministrador) {
+            resultado = await pool.query(
+                `UPDATE usuarios
+                 SET nombre = $1,
+                     apellido = $2,
+                     region = $3,
+                     comuna = $4,
+                     direccion = $5,
+                     fecha_actualizacion = CURRENT_TIMESTAMP
+                 WHERE id_usuario = $6
+                   AND activo = 1`,
+                [
+                    nombreFinal,
+                    apellidoFinal,
+                    regionFinal,
+                    comunaFinal,
+                    direccionFinal,
+                    idUsuario
+                ]
+            );
+        } else {
+            resultado = await pool.query(
+                `UPDATE usuarios
+                 SET nombre = $1,
+                     apellido = $2,
+                     correo = $3,
+                     id_rol = $4,
+                     run = $5,
+                     region = $6,
+                     comuna = $7,
+                     direccion = $8,
+                     fecha_actualizacion = CURRENT_TIMESTAMP
+                 WHERE id_usuario = $9
+                   AND activo = 1`,
+                [
+                    nombreFinal,
+                    apellidoFinal,
+                    correo,
+                    idRolFinal,
+                    run,
+                    regionFinal,
+                    comunaFinal,
+                    direccionFinal,
+                    idUsuario
+                ]
+            );
+        }
 
         if (resultado.rowCount === 0) {
             return res.status(409).json({
