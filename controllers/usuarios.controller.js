@@ -746,6 +746,115 @@ async function desactivarUsuario(req, res) {
 }
 
 // ==========================================
+// REACTIVAR USUARIO
+// SOLO ADMINISTRADOR
+// ==========================================
+
+async function reactivarUsuario(req, res) {
+    const idUsuario = req.params.id;
+
+    if (
+        !/^[1-9][0-9]*$/.test(idUsuario) ||
+        !Number.isSafeInteger(Number(idUsuario))
+    ) {
+        return res.status(400).json({
+            mensaje: 'El ID del usuario no es válido'
+        });
+    }
+
+    try {
+        const consultaUsuario = await pool.query(
+            `SELECT id_usuario, activo
+             FROM usuarios
+             WHERE id_usuario = $1`,
+            [idUsuario]
+        );
+
+        if (consultaUsuario.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: 'Usuario no encontrado'
+            });
+        }
+
+        if (Number(consultaUsuario.rows[0].activo) !== 0) {
+            return res.status(409).json({
+                mensaje: 'El usuario ya se encuentra activo'
+            });
+        }
+
+        const resultado = await pool.query(
+            `UPDATE usuarios
+             SET activo = 1,
+                 fecha_actualizacion = CURRENT_TIMESTAMP
+             WHERE id_usuario = $1
+               AND activo = 0`,
+            [idUsuario]
+        );
+
+        if (resultado.rowCount === 0) {
+            const estadoActual = await pool.query(
+                `SELECT id_usuario, activo
+                 FROM usuarios
+                 WHERE id_usuario = $1`,
+                [idUsuario]
+            );
+
+            if (estadoActual.rows.length === 0) {
+                return res.status(404).json({
+                    mensaje: 'Usuario no encontrado'
+                });
+            }
+
+            return res.status(409).json({
+                mensaje: 'El usuario ya se encuentra activo'
+            });
+        }
+
+        const usuarioReactivado = await pool.query(
+            `SELECT
+                u.id_usuario AS id,
+                u.nombre,
+                u.apellido,
+                u.correo AS email,
+                r.nombre AS rol,
+                u.activo,
+                u.fecha_registro AS creado_en,
+                u.fecha_actualizacion AS actualizado_en,
+                u.run,
+                u.region,
+                u.comuna,
+                u.direccion
+             FROM usuarios u
+             INNER JOIN roles r
+                ON u.id_rol = r.id_rol
+             WHERE u.id_usuario = $1`,
+            [idUsuario]
+        );
+
+        if (usuarioReactivado.rows.length === 0) {
+            return res.status(404).json({
+                mensaje: 'Usuario no encontrado'
+            });
+        }
+
+        return res.status(200).json({
+            mensaje: 'Usuario reactivado correctamente',
+            usuario: usuarioReactivado.rows[0]
+        });
+
+    } catch (error) {
+        console.error(
+            'Error al reactivar usuario:',
+            error.message
+        );
+
+        return res.status(500).json({
+            mensaje: 'No fue posible reactivar el usuario'
+        });
+    }
+}
+
+// ==========================================
 // EXPORTAR FUNCIONES
 // ==========================================
 
@@ -754,5 +863,6 @@ module.exports = {
     crearVendedor: crearVendedor,
     obtenerUsuarioPorId: obtenerUsuarioPorId,
     actualizarUsuario: actualizarUsuario,
-    desactivarUsuario: desactivarUsuario
+    desactivarUsuario: desactivarUsuario,
+    reactivarUsuario: reactivarUsuario
 };

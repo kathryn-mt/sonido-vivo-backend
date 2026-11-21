@@ -64,6 +64,18 @@ router.delete(
 );
 
 // ==========================================
+// REACTIVAR USUARIO
+// SOLO ADMINISTRADOR
+// ==========================================
+
+router.patch(
+    '/:id/reactivar',
+    authMiddleware.verificarToken,
+    authMiddleware.verificarRol(['ADMINISTRADOR']),
+    usuariosController.reactivarUsuario
+);
+
+// ==========================================
 // EXPORTAR RUTAS
 // ==========================================
 

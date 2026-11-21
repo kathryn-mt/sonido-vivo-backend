@@ -15,7 +15,8 @@ const endpointsEsperados = {
     '/api/v1/auth/perfil': ['get'],
     '/api/v1/auth/administracion': ['get'],
     '/api/v1/usuarios': ['get', 'post'],
-    '/api/v1/usuarios/{id}': ['get', 'put', 'delete']
+    '/api/v1/usuarios/{id}': ['get', 'put', 'delete'],
+    '/api/v1/usuarios/{id}/reactivar': ['patch']
 };
 
 function comprobarReferencias(documento, valor) {

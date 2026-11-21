@@ -1089,6 +1089,139 @@
           }
         }
       }
+    },
+    "/api/v1/usuarios/{id}/reactivar": {
+      "patch": {
+        "tags": ["Usuarios"],
+        "operationId": "reactivarUsuario",
+        "summary": "Reactivar un usuario",
+        "description": "Solo ADMINISTRADOR. Reactiva una cuenta desactivada sin crear un usuario ni modificar sus demás datos o su rol. El cuerpo de la solicitud no se utiliza; solo se actualizan activo y fecha_actualizacion.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Identificador entero positivo del usuario existente.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 101
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuario reactivado correctamente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioRespuesta"
+                },
+                "example": {
+                  "mensaje": "Usuario reactivado correctamente",
+                  "usuario": {
+                    "id": 101,
+                    "nombre": "Ana",
+                    "apellido": "Ejemplo",
+                    "email": "cliente@example.com",
+                    "rol": "CLIENTE",
+                    "activo": 1,
+                    "creado_en": "2026-01-15T12:00:00.000Z",
+                    "actualizado_en": "2026-01-16T12:00:00.000Z",
+                    "run": "123456785",
+                    "region": "Metropolitana",
+                    "comuna": "Santiago",
+                    "direccion": "Calle de ejemplo 123"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El ID no es un entero positivo válido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El ID del usuario no es válido"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "JWT ausente, inválido o vencido.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Token inválido"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El usuario autenticado no tiene rol ADMINISTRADOR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No tienes permisos para acceder a este recurso"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe un usuario con el ID indicado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "Usuario no encontrado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "La cuenta ya se encuentra activa.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "El usuario ya se encuentra activo"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No fue posible reactivar el usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                },
+                "example": {
+                  "mensaje": "No fue posible reactivar el usuario"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
